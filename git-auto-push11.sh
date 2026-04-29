@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # ================================
-# 🔐 Secure Git Auto-Push Script
+# 🔐 Ultimate Git Auto-Push Script
 # ================================
 
-set -e  # Exit on any error
+set -e  # Exit on error
 
 # Colors
 RED='\033[0;31m'
@@ -12,70 +12,55 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo -e "${GREEN}=== Secure Git Auto-Push ===${NC}"
+echo -e "${GREEN}=== Git Auto-Push (Stable) ===${NC}"
 echo ""
 
 # -------------------------------
-# Check if git is installed
+# Check Git
 # -------------------------------
 if ! command -v git &> /dev/null; then
-    echo -e "${RED}❌ Git is not installed. Please install Git first.${NC}"
+    echo -e "${RED}❌ Git is not installed.${NC}"
     exit 1
 fi
 
 # -------------------------------
-# Input Section
+# Input
 # -------------------------------
-read -p "📝 Enter commit message: " COMMIT_MSG
-if [ -z "$COMMIT_MSG" ]; then
-    echo -e "${RED}❌ Commit message is required.${NC}"
-    exit 1
-fi
+read -p "📝 Commit message: " COMMIT_MSG
+[ -z "$COMMIT_MSG" ] && { echo -e "${RED}❌ Required.${NC}"; exit 1; }
 
-read -p "🌐 Enter remote URL (HTTPS or SSH): " REMOTE_URL
-if [ -z "$REMOTE_URL" ]; then
-    echo -e "${RED}❌ Remote URL is required.${NC}"
-    exit 1
-fi
-
-# Prevent token usage in URL
-if [[ "$REMOTE_URL" == *"@"*"github.com"* && "$REMOTE_URL" == *"http"* ]]; then
-    echo -e "${RED}❌ Do NOT include tokens in the URL.${NC}"
-    echo -e "${YELLOW}Use:${NC} https://github.com/user/repo.git"
-    echo -e "${YELLOW}Or SSH:${NC} git@github.com:user/repo.git"
-    exit 1
-fi
+read -p "🌐 Remote URL (leave empty to skip): " REMOTE_URL
 
 read -p "📂 Files to add (default '.'): " FILES
 FILES=${FILES:-"."}
 
 echo ""
-echo -e "${YELLOW}⚙️ Running workflow...${NC}"
+echo -e "${YELLOW}⚙️ Running...${NC}"
 echo ""
 
 # -------------------------------
-# Step 1: Init repo
+# Init repo
 # -------------------------------
 if [ ! -d ".git" ]; then
-    echo "[1/7] Initializing repository..."
+    echo "[1/7] Initializing..."
     git init
 else
-    echo "[1/7] Repo already initialized ✓"
+    echo "[1/7] Repo exists ✓"
 fi
 
 # -------------------------------
-# Step 2: .gitignore setup
+# .gitignore
 # -------------------------------
 if [ ! -f ".gitignore" ]; then
     echo "[2/7] Creating .gitignore..."
     cat > .gitignore << EOF
-# Sensitive files
+# Sensitive
 git-auto-push.sh
 *.env
 *.pem
 *.key
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
 
@@ -89,61 +74,91 @@ else
 fi
 
 # -------------------------------
-# Step 3: Add files
+# Add files
 # -------------------------------
-echo "[3/7] Staging files..."
+echo "[3/7] Staging..."
 git add $FILES
 
 # -------------------------------
-# Step 4: Commit
+# Commit
 # -------------------------------
 if git diff --cached --quiet; then
-    echo "[4/7] No changes to commit ✓"
+    echo "[4/7] Nothing to commit ✓"
 else
     echo "[4/7] Committing..."
     git commit -m "$COMMIT_MSG"
-    echo "✓ Commit created"
+    echo "✓ Commit done"
 fi
 
 # -------------------------------
-# Step 5: Remote setup
+# Branch detection
 # -------------------------------
-if git remote get-url origin &>/dev/null; then
-    echo "[5/7] Remote exists ✓"
-else
-    echo "[5/7] Adding remote..."
-    git remote add origin "$REMOTE_URL"
-    echo "✓ Remote added"
-fi
-
-# -------------------------------
-# Step 6: Branch handling
-# -------------------------------
-echo "[6/7] Checking branch..."
+echo "[5/7] Detecting branch..."
 
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-if [ "$CURRENT_BRANCH" != "main" ]; then
-    if git show-ref --verify --quiet refs/heads/main; then
-        git checkout main
-    else
-        git checkout -b main
-    fi
-    echo "✓ Switched to main"
+# If detached HEAD or empty repo
+if [ "$CURRENT_BRANCH" = "HEAD" ]; then
+    CURRENT_BRANCH="main"
+    git checkout -b "$CURRENT_BRANCH"
+    echo "✓ Created branch: $CURRENT_BRANCH"
 else
-    echo "✓ Already on main"
+    echo "✓ Current branch: $CURRENT_BRANCH"
 fi
 
 # -------------------------------
-# Step 7: Push
+# Remote handling
+# -------------------------------
+echo "[6/7] Handling remote..."
+
+if [ -n "$REMOTE_URL" ]; then
+
+    # Prevent token in HTTPS URL
+    if [[ "$REMOTE_URL" == *"@"*"github.com"* && "$REMOTE_URL" == *"http"* ]]; then
+        echo -e "${RED}❌ Token in URL not allowed.${NC}"
+        exit 1
+    fi
+
+    if git remote get-url origin &>/dev/null; then
+        CURRENT_URL=$(git remote get-url origin)
+
+        if [ "$CURRENT_URL" != "$REMOTE_URL" ]; then
+            echo "⚠️ Remote mismatch"
+            echo "Current: $CURRENT_URL"
+            echo "New    : $REMOTE_URL"
+
+            read -p "Update remote? (y/n): " UPDATE
+            if [ "$UPDATE" = "y" ]; then
+                git remote set-url origin "$REMOTE_URL"
+                echo "✓ Remote updated"
+            else
+                echo "→ Keeping existing remote"
+            fi
+        else
+            echo "✓ Remote correct"
+        fi
+    else
+        git remote add origin "$REMOTE_URL"
+        echo "✓ Remote added"
+    fi
+else
+    echo "→ Skipping remote setup"
+fi
+
+# -------------------------------
+# Push
 # -------------------------------
 echo "[7/7] Pushing..."
 
-if git push -u origin main; then
-    echo -e "${GREEN}✓ Push successful!${NC}"
+if git remote get-url origin &>/dev/null; then
+    if git push -u origin "$CURRENT_BRANCH"; then
+        echo -e "${GREEN}✓ Push successful!${NC}"
+    else
+        echo -e "${RED}❌ Push failed.${NC}"
+        exit 1
+    fi
 else
-    echo -e "${RED}❌ Push failed!${NC}"
-    exit 1
+    echo -e "${YELLOW}⚠️ No remote configured. Skipping push.${NC}"
 fi
 
 # -------------------------------
@@ -152,5 +167,5 @@ fi
 echo ""
 echo -e "${GREEN}=== Done ===${NC}"
 echo "Commit : $COMMIT_MSG"
-echo "Remote : $REMOTE_URL"
+echo "Branch : $CURRENT_BRANCH"
 echo "Files  : $FILES"
