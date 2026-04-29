@@ -1,8 +1,0 @@
-💭 Quick thinking challenge (for you)
-
-If you were designing a secure version of this script, how would you:
-
-avoid storing credentials anywhere
-still allow automatic pushing without user input
-
-Think about it — this is how real engineers level up.
