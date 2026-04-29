@@ -1,0 +1,12 @@
+# Sensitive
+git-auto-push.sh
+*.env
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
